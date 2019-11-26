@@ -1,20 +1,16 @@
 ---
 title: "R Notebook"
 output:
+  html_notebook: default
   html_document:
     df_print: paged
-  html_notebook: default
   pdf_document: default
 ---
 
-This is an [R Markdown](http://rmarkdown.rstudio.com) Notebook. When you execute code within the notebook, the results appear beneath the code. 
 
-*Run* = *Ctrl+Shift+Enter*. 
-*Insert Chunk* = *Ctrl+Alt+I*.
-*Ctrl+Shift+K* = *Preview*
-
-
-The preview shows you a rendered HTML copy of the contents of the editor. Consequently, unlike *Knit*, *Preview* does not run any R code chunks. Instead, the output of the chunk when it was last run in the editor is displayed.
+```{r}
+#install.packages("caret")
+```
 
 
 ```{r warning=FALSE}
@@ -24,6 +20,8 @@ library(iterators)
 library(nnet)
 library(reshape2)
 library(ggplot2)
+library(caret)
+library(glmnet)
 ```
 ```{r}
 mnist.dat <- read.csv("mnist.csv")
@@ -96,25 +94,41 @@ image(digit_example, axes = FALSE, col = grey(seq(0, 1, length = 256)), asp=1)
 ```
 
 ```{r}
-hist(as.numeric(actual_digit))
+hist(as.numeric(actual_digit), main="Frequency of pixels values", xlab="Pixel Value", ylab="Frequency")
 
 ```
 
 ```{r}
-hist.data = hist(as.matrix(mnist.dat[,-1]), breaks=32)
+hist.data = hist(as.matrix(mnist.dat[,-1]), breaks=32, main="Frequency of pixels values", xlab="Pixel Value", ylab="Frequency")
 hist.data$counts = log10(hist.data$counts)
-plot(hist.data)
+plot(hist.data, main="Frequency of scaled pixels values", xlab="Pixel Value", ylab="Frequency")
 axis(side=1, at=seq(0, 256, 8))
 ```
 
 ```{r}
 # indices_of_useful_features = 
 # function(x) x[which(x < 248)] = 0
-cleaned_images = t(apply(pixels_data, MARGIN = 1, FUN=function(x) replace(x, which(x < 248), 0)))
+cleaned_images = t(apply(pixels_data, MARGIN = 1, FUN=function(x) replace(x, which(x < 5), 0)))
 image_density = apply(cleaned_images, MARGIN=1, FUN=function(x) sum(x))
 image_density_per_pixel = apply(data.frame(image_density), MARGIN=1, FUN=function(x) sum(x)/784) # Calculate density
-data = cbind.data.frame(density=image_density, density_per_pixel=image_density_per_pixel, scaled_density = scale(image_density), label=mnist.dat$label)
+data = cbind.data.frame(density=image_density, 
+                        density_per_pixel=scale(image_density_per_pixel), 
+                        scaled_density = scale(image_density), 
+                        label=mnist.dat$label)
+
+
+data2 = cbind.data.frame(log_dens=log(scale(image_density_per_pixel)), 
+                        ten_log_dens=log10(scale(image_density_per_pixel)),
+                        scaled_density = scale(image_density),
+                        squared_dens=(scale(image_density))^2,
+                        cubed_dens=abs((scale(image_density))^3),
+                        label=mnist.dat$label)
+data2$ten_log_dens[is.na(data2$ten_log_dens)] = 0 
+data2$log_dens[is.na(data2$log_dens)] = 0 
+
 head(data)
+head(data2)
+
 ```
 
 ```{r}
@@ -135,14 +149,74 @@ cormat = dist(t(summary_per_digit[c("mean","sd"),]))
 data.frame(as.matrix(cormat))
 ```
 ```{r}
-# melted_cormat <- melt(as.matrix(cormat))
-# ggplot(data = melted_cormat, aes(x=Var1, y=Var2, fill=value)) + geom_tile()
 cormat = dist(t(summary_per_digit[c("mean","sd","median","minimum","maximum"),]))
 melted_cormat <- melt(as.matrix(cormat))
 ggplot(data = melted_cormat, aes(x=Var1, y=Var2, fill=value)) + geom_tile()
 ```
 ```{r}
-density_model = multinom(label ~ scaled_density, data, maxit=5000)
+density_model = multinom(label ~ density_per_pixel, data, maxit=1000)
 density_model
+
 ```
+```{r}
+density_model2 = multinom(label ~ scaled_density + log_dens, data2, maxit=1000)
+density_model2
+
+predicted = predict(density_model2, data2)
+confmat = table(data2$label, predicted)
+confmat
+sum(diag(confmat))/sum(confmat)
+
+```
+
+```{r}
+predicted = predict(density_model, data)
+confmat = table(data$label, predicted)
+confmat
+```
+```{r}
+sum(diag(confmat))/sum(confmat)
+```
+```{r}
+data_for_ml = cbind.data.frame(label=mnist.dat$label, scaled_pixels_data)
+```
+
+```{r}
+pixels_data = mnist.dat[,-1]
+
+
+down_sampled_images = pixels_data %>% as.matrix(ncol=28, nrow=28) %>% down_sample_image(factor=2)
+
+scaled_pixels_data = scale(down_sampled_images)
+scaled_pixels_data[is.na(scaled_pixels_data)] = 0 #Replacing NaN with 0
+
+data_for_ml = cbind.data.frame(label=mnist.dat$label, scaled_pixels_data)
+
+```
+
+```{r}
+training_data = sample_n(data_for_ml, 5000)
+validation_data = setdiff(data_for_ml, training_data)
+```
+
+```{r}
+trained_model = glmnet(as.matrix(training_data[,-1]), training_data[,1], family="multinomial", lambda = 0.015)
+```
+
+```{r}
+predicted = predict(trained_model, training_data[,-1])
+confmat = table(training_data$label, predicted)
+confmat
+sum(diag(confmat))/sum(confmat)
+```
+
+```{r}
+
+predicted = predict(trained_model, validation_data[,-1])
+confmat = table(validation_data$label, predicted)
+confmat
+sum(diag(confmat))/sum(confmat)
+
+```
+
 
