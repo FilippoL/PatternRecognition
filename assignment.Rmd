@@ -10,6 +10,7 @@ output:
 
 ```{r}
 #install.packages("caret")
+#install.packages("e1071")
 ```
 
 
@@ -22,6 +23,7 @@ library(reshape2)
 library(ggplot2)
 library(caret)
 library(glmnet)
+library(e1071)
 ```
 ```{r}
 mnist.dat <- read.csv("mnist.csv")
@@ -117,14 +119,13 @@ data = cbind.data.frame(density=image_density,
                         label=mnist.dat$label)
 
 
-data2 = cbind.data.frame(log_dens=log(scale(image_density_per_pixel)), 
-                        ten_log_dens=log10(scale(image_density_per_pixel)),
+data2 = cbind.data.frame(log_dens=scale(log(image_density_per_pixel)), 
+                        sqrt_dens=scale(sqrt(image_density_per_pixel)), 
+                        sin_dens=scale(sin(image_density_per_pixel)), 
+                        tanh_dens=tanh(scale(image_density_per_pixel)),  #TODO: Explain why scale after
                         scaled_density = scale(image_density),
-                        squared_dens=(scale(image_density))^2,
-                        cubed_dens=abs((scale(image_density))^3),
+                        squared_dens=scale(image_density^2),
                         label=mnist.dat$label)
-data2$ten_log_dens[is.na(data2$ten_log_dens)] = 0 
-data2$log_dens[is.na(data2$log_dens)] = 0 
 
 head(data)
 head(data2)
@@ -177,30 +178,20 @@ confmat
 ```{r}
 sum(diag(confmat))/sum(confmat)
 ```
+
 ```{r}
+#pixels_data = mnist.dat[,-1]
+# scaled_pixels_data <- mnist.dat[,2:784]/255
+# down_sampled_images = pixels_data %>% as.matrix(ncol=28, nrow=28) %>% down_sample_image(factor=2)
+# scaled_pixels_data = scale(pixels_data)
+# scaled_pixels_data[is.na(scaled_pixels_data)] = 0 #Replacing NaN with 0
 data_for_ml = cbind.data.frame(label=mnist.dat$label, scaled_pixels_data)
-```
-
-```{r}
-pixels_data = mnist.dat[,-1]
-
-
-down_sampled_images = pixels_data %>% as.matrix(ncol=28, nrow=28) %>% down_sample_image(factor=2)
-
-scaled_pixels_data = scale(down_sampled_images)
-scaled_pixels_data[is.na(scaled_pixels_data)] = 0 #Replacing NaN with 0
-
-data_for_ml = cbind.data.frame(label=mnist.dat$label, scaled_pixels_data)
-
-```
-
-```{r}
 training_data = sample_n(data_for_ml, 5000)
-validation_data = setdiff(data_for_ml, training_data)
+validation_data = setdiff(data_for_ml, training_data) #TODO: check what is going on
 ```
 
 ```{r}
-trained_model = glmnet(as.matrix(training_data[,-1]), training_data[,1], family="multinomial", lambda = 0.015)
+trained_model = multinom(label ~., family = "multinomial", data = training_data, MaxNWts =10000000, maxit=50)
 ```
 
 ```{r}
@@ -211,12 +202,33 @@ sum(diag(confmat))/sum(confmat)
 ```
 
 ```{r}
-
 predicted = predict(trained_model, validation_data[,-1])
 confmat = table(validation_data$label, predicted)
 confmat
 sum(diag(confmat))/sum(confmat)
 
 ```
+```{r}
+trained_model = svm(label ~., data = training_data)
+predicted = predict(trained_model, validation_data[,-1])
+confmat = table(validation_data$label, predicted)
+confmat
+sum(diag(confmat))/sum(confmat)
+```
 
+```{r}
+trained_model = nnet(label ~., data = training_data, size=5,MaxNWts=5000)
+predicted = predict(trained_model, validation_data[,-1], type="class")
+confmat = table(validation_data$label, predicted)
+confmat
+sum(diag(confmat))/sum(confmat)
+```
+```{r}
+trained_model <- cv.glmnet(as.matrix(training_data[,-c(1)]), training_data$label,family="multinomial", type.measure="class")
+plot(trained_model)
+predicted = predict(as.matrix(trained_model), validation_data[,-1], type="class")
+confmat = table(validation_data$label, predicted)
+confmat
+sum(diag(confmat))/sum(confmat)
+```
 
