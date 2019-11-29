@@ -8,18 +8,18 @@ output:
 ---
 
 
-```{r}
-#install.packages("caret")
-#install.packages("e1071")
-install.packages("OpenImageR") 
-install.packages("dplyr")
-install.packages("iterators")
-install.packages("nnet")
-install.packages("reshape2")
-install.packages("ggplot2")
-install.packages("caret")
-install.packages("glmnet")
-install.packages("e1071")
+```{r warning=FALSE}
+# install.packages("OpenImageR") 
+# install.packages("dplyr")
+# install.packages("iterators")
+# install.packages("nnet")
+# install.packages("reshape2")
+# install.packages("ggplot2")
+# install.packages("caret")
+# install.packages("glmnet")
+# install.packages("e1071")
+# install.packages("factoextra")
+
 ```
 
 
@@ -33,6 +33,7 @@ library(ggplot2)
 library(caret)
 library(glmnet)
 library(e1071)
+library(factoextra)
 ```
 ```{r}
 mnist.dat <- read.csv("mnist.csv")
@@ -268,4 +269,24 @@ confmat
 sum(diag(confmat))/sum(confmat)
 ```
 
+```{r}
+principal_components = prcomp(scaled_pixels_data[,-indices_of_useless_features])
+```
+
+```{r}
+data3 = cbind.data.frame(scaled_density = scale(image_density),
+                        label=mnist.dat$label)
+
+```
+
+
+```{r}
+density_model3 = multinom(label ~ scaled_density + log_dens, data2, maxit=1000)
+density_model3
+
+predicted = predict(density_model3, data2)
+confmat = table(data2$label, predicted)
+confmat
+sum(diag(confmat))/sum(confmat)
+```
 
