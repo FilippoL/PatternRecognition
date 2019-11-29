@@ -270,21 +270,25 @@ sum(diag(confmat))/sum(confmat)
 ```
 
 ```{r}
-principal_components = prcomp(scaled_pixels_data[,-indices_of_useless_features])
+pca_model = prcomp(scaled_pixels_data[,-indices_of_useless_features])
+```
+```{r}
+principal_components = as.matrix(pca_model$x)
 ```
 
 ```{r}
 data3 = cbind.data.frame(scaled_density = scale(image_density),
+                         first_pca = scale(principal_components[,1]),
                         label=mnist.dat$label)
-
+head(data3)
 ```
 
 
 ```{r}
-density_model3 = multinom(label ~ scaled_density + log_dens, data2, maxit=1000)
+density_model3 = multinom(label ~ scaled_density + first_pca, data3, maxit=1000)
 density_model3
 
-predicted = predict(density_model3, data2)
+predicted = predict(density_model3, data3)
 confmat = table(data2$label, predicted)
 confmat
 sum(diag(confmat))/sum(confmat)
