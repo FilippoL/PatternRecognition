@@ -183,10 +183,9 @@ sum(diag(confmat))/sum(confmat)
 predicted = predict(density_model, data)
 confmat = table(data$label, predicted)
 confmat
-```
-```{r}
 sum(diag(confmat))/sum(confmat)
 ```
+
 
 ```{r}
 #pixels_data = mnist.dat[,-1]
