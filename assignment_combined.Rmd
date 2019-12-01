@@ -1,10 +1,10 @@
 ---
 title: "R Notebook"
 output:
-  html_notebook: default
+  pdf_document: default
   html_document:
     df_print: paged
-  pdf_document: default
+  html_notebook: default
 ---
 
 
@@ -57,6 +57,12 @@ combine_images = function(normal_digit){
   indices_cap_pixel_values = which(new_image>255)
   new_image[indices_cap_pixel_values] = 255
   return (t(new_image))
+}
+
+edge_detect = function(normal_digit){
+  digit_example = show_image_data(normal_digit)
+  detect_image = edge_detection(digit_example,  method = 'Scharr', conv_mode = 'same')
+  return (t(detect_image))
 }
 
 
@@ -150,6 +156,12 @@ head(data)
 head(data2)
 
 ```
+```{r}
+data_for_boxplots = cbind.data.frame(density=image_density, 
+                        label=mnist.dat$label)
+# head(dcast(formula=density~label, data=data_for_boxplots))
+boxplot(density~label,sample_n(data_for_boxplots, 5000))
+```
 
 ```{r}
 summary_per_digit = rbind.data.frame(tapply(data$density_per_pixel, data$label,  function(x) cbind(mean = mean(x) ,
@@ -166,21 +178,36 @@ data.frame(t(summary_per_digit))
 
 ```{r}
 cormat = dist(t(summary_per_digit[c("mean","sd"),]))
-data.frame(as.matrix(cormat))
+melted_cormat <- melt(log(as.matrix(cormat)))
+ggplot(data = melted_cormat, aes(x=Var1, y=Var2, fill=value)) + geom_tile()
 ```
 ```{r}
-cormat = dist(t(summary_per_digit[c("mean","sd","median","minimum","maximum"),]))
-melted_cormat <- melt(as.matrix(cormat))
-ggplot(data = melted_cormat, aes(x=Var1, y=Var2, fill=value)) + geom_tile()
+distance_matrix = dist(t(summary_per_digit[c("mean","sd","median","minimum","maximum"),]))
+melted_distance_matrix <- melt(as.matrix(distance_matrix))
+ggplot(data = melted_distance_matrix, aes(x=Var1, y=Var2, fill=value)) + geom_tile()
 ```
 ```{r}
 density_model = multinom(label ~ density_per_pixel, data, maxit=1000)
 predicted = predict(density_model, data)
 confmat = table(data$label, predicted)
-confmat
+
 sum(diag(confmat))/sum(confmat)
 
 ```
+```{r}
+density_model
+```
+```{r}
+
+melted_confmat <- melt(as.matrix(confmat))
+ggplot(data =  melted_confmat, mapping = aes(x = Var1, y = predicted)) +
+  geom_tile(aes(fill = value), colour = "white") +
+  geom_text(aes(label = sprintf("%1.0f", value)), vjust = 1) +
+  scale_fill_gradient(low = "blue", high = "red") +
+  theme_bw() + theme(legend.position = "none") + 
+  scale_x_discrete(name="Digit", limits=0:9) + scale_y_discrete(name="Digit", limits=0:9)
+```
+
 ```{r}
 density_model2 = multinom(label ~ scaled_density + log_dens, data2, maxit=1000)
 predicted = predict(density_model2, data2)
@@ -190,24 +217,14 @@ sum(diag(confmat))/sum(confmat)
 
 ```
 ```{r}
-cleaned_images = t(apply(pixels_data, MARGIN = 1, FUN=function(x) replace(x, which(x < 5), 0)))
 
-combined_images = t(apply(cleaned_images, MARGIN=1, FUN=combine_images))
 ```
 
 ```{r}
-# combined_images = cleaned_images %>% combine_images
+cleaned_images = t(apply(pixels_data, MARGIN = 1, FUN=function(x) replace(x, which(x < 5), 0)))
 
+combined_images = t(apply(cleaned_images, MARGIN=1, FUN=edge_detect))
 actual_digit = combined_images[445,]
- 
-# digit_example = show_image_data(actual_digit)
-# flipped_image = Augmentation(digit_example, flip_mode = "vertical")
-# 
-# new_image = flipped_image + digit_example
-# 
-# indices_cap_pixel_values = which(new_image>255)
-# 
-# new_image[indices_cap_pixel_values] = 255
 
 image(matrix(actual_digit, nrow=28,ncol=28,byrow=T), axes = FALSE, col = grey(seq(0, 1, length = 256)), asp=1)
 
@@ -224,7 +241,7 @@ data = cbind.data.frame(density=image_density,
 head(data)
 ```
 ```{r}
-density_model = multinom(label ~ scaled_density + scaled_density_combined, data, maxit=1000)
+density_model = multinom(label ~ scaled_density_combined, data, maxit=1000)
 predicted = predict(density_model, data)
 confmat = table(data$label, predicted)
 confmat
@@ -328,7 +345,7 @@ head(data3)
 
 
 ```{r}
-density_model3 = multinom(label ~ scaled_density + first_pca, data3, maxit=1000)
+density_model3 = multinom(label ~ first_pca, data3, maxit=1000)
 density_model3
 
 predicted = predict(density_model3, data3)
@@ -338,13 +355,14 @@ sum(diag(confmat))/sum(confmat)
 ```
 
 ```{r}
-pca_model = prcomp(combined_images[,-indices_of_useless_features])
+pca_model = prcomp(cleaned_images[,-indices_of_useless_features])
 principal_components = as.matrix(pca_model$x)
 ```
 
 ```{r}
 data3 = cbind.data.frame(scaled_density = scale(image_density),
                          first_pca = scale(principal_components[,1]),
+                        scaled_density_combined = scale(image_density_combined), 
                         label=mnist.dat$label)
 density_model3 = multinom(label ~ scaled_density + first_pca, data3, maxit=1000)
 density_model3
