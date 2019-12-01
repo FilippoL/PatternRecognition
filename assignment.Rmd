@@ -9,17 +9,15 @@ output:
 
 
 ```{r}
-#install.packages("caret")
-#install.packages("e1071")
-install.packages("OpenImageR") 
-install.packages("dplyr")
-install.packages("iterators")
-install.packages("nnet")
-install.packages("reshape2")
-install.packages("ggplot2")
-install.packages("caret")
-install.packages("glmnet")
-install.packages("e1071")
+# install.packages("OpenImageR") 
+# install.packages("dplyr")
+# install.packages("iterators")
+# install.packages("nnet")
+# install.packages("reshape2")
+# install.packages("ggplot2")
+# install.packages("caret")
+# install.packages("glmnet")
+# install.packages("e1071")
 ```
 
 
@@ -49,6 +47,17 @@ show_image_from_data = function(data, row) {
 show_image_data = function(actual_digit) {
   return (t(matrix(as.numeric(actual_digit),nrow=28,ncol=28,byrow=T))[,c(28:1),drop = FALSE])
 }
+combine_images = function(normal_digit){
+  actual_digit = normal_digit
+  digit_example = show_image_data(actual_digit)
+  flipped_image = Augmentation(digit_example, flip_mode = "vertical")
+  new_image = flipped_image + digit_example
+  indices_cap_pixel_values = which(new_image>255)
+  new_image[indices_cap_pixel_values] = 255
+  return (t(new_image))
+}
+
+
 show_image_from_data(mnist.dat, 1)  
 
 ```
@@ -117,11 +126,10 @@ axis(side=1, at=seq(0, 256, 8))
 ```
 
 ```{r}
-# indices_of_useful_features = 
-# function(x) x[which(x < 248)] = 0
 cleaned_images = t(apply(pixels_data, MARGIN = 1, FUN=function(x) replace(x, which(x < 5), 0)))
 image_density = apply(cleaned_images, MARGIN=1, FUN=function(x) sum(x))
-image_density_per_pixel = apply(data.frame(image_density), MARGIN=1, FUN=function(x) sum(x)/784) # Calculate density
+image_density_per_pixel = apply(data.frame(image_density), MARGIN=1, FUN=function(x) sum(x)/784)
+
 data = cbind.data.frame(density=image_density, 
                         density_per_pixel=scale(image_density_per_pixel), 
                         scaled_density = scale(image_density), 
@@ -165,27 +173,42 @@ ggplot(data = melted_cormat, aes(x=Var1, y=Var2, fill=value)) + geom_tile()
 ```
 ```{r}
 density_model = multinom(label ~ density_per_pixel, data, maxit=1000)
-density_model
+predicted = predict(density_model, data)
+confmat = table(data$label, predicted)
+confmat
+sum(diag(confmat))/sum(confmat)
 
 ```
 ```{r}
 density_model2 = multinom(label ~ scaled_density + log_dens, data2, maxit=1000)
-density_model2
-
 predicted = predict(density_model2, data2)
 confmat = table(data2$label, predicted)
 confmat
 sum(diag(confmat))/sum(confmat)
 
 ```
+```{r}
+cleaned_images = t(apply(pixels_data, MARGIN = 1, FUN=function(x) replace(x, which(x < 5), 0)))
+
+combined_images = t(apply(cleaned_images, MARGIN=1, FUN=combine_images))
+```
 
 ```{r}
-predicted = predict(density_model, data)
-confmat = table(data$label, predicted)
-confmat
-```
-```{r}
-sum(diag(confmat))/sum(confmat)
+# combined_images = cleaned_images %>% combine_images
+
+actual_digit = combined_images[445,]
+ 
+# digit_example = show_image_data(actual_digit)
+# flipped_image = Augmentation(digit_example, flip_mode = "vertical")
+# 
+# new_image = flipped_image + digit_example
+# 
+# indices_cap_pixel_values = which(new_image>255)
+# 
+# new_image[indices_cap_pixel_values] = 255
+
+image(matrix(actual_digit, nrow=28,ncol=28,byrow=T), axes = FALSE, col = grey(seq(0, 1, length = 256)), asp=1)
+
 ```
 
 ```{r}
