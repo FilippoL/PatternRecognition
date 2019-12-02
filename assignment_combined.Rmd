@@ -33,6 +33,8 @@ library(ggplot2)
 library(glmnet)
 library(e1071)
 library(factoextra)
+library(grid)
+library(gridExtra)
 ```
 ```{r}
 mnist.dat <- read.csv("mnist.csv")
@@ -83,24 +85,44 @@ head(mnist.summary[mnist.summary$sd==0,])
 ```
 ```{r}
 indices_of_useless_features = which(mnist.summary$sd == 0)
-actual_digit = mnist.dat[90,-1]
+actual_digit_strict = mnist.dat[2,-1]
+actual_digit_strict[,indices_of_useless_features] = 125
+digit_example_strict = show_image_data(actual_digit_strict)
+image(digit_example_strict, axes = FALSE, col = grey(seq(0, 1, length = 256)), asp=1)
+```
+```{r}
+indices_of_useless_features = which(mnist.summary$sd < 1)
+actual_digit = mnist.dat[2,-1]
 actual_digit[,indices_of_useless_features] = 125
 digit_example = show_image_data(actual_digit)
 image(digit_example, axes = FALSE, col = grey(seq(0, 1, length = 256)), asp=1)
 ```
 ```{r}
-indices_of_useless_features = which(mnist.summary$sd < 1)
-actual_digit = mnist.dat[400,-1]
-actual_digit[,indices_of_useless_features] = 125
-digit_example = show_image_data(actual_digit)
-image(digit_example, axes = FALSE, col = grey(seq(0, 1, length = 256)), asp=1)
+# standard_deviations_prepared_for_image = matrix(mnist.summary$sd/max(mnist.summary$sd), nrow=28, ncol=28, byrow=TRUE)
+# summary_of_sds <- melt(standard_deviations_prepared_for_image)
+# ggplot(data = summary_of_sds, aes(x=Var1, y=Var2, fill=value)) + geom_tile() +
+# scale_x_discrete(name="X Dimension") + scale_y_discrete(name="Y Dimension")
+# 
+# image(standard_deviations_prepared_for_image, axes = FALSE, col = grey(seq(0, 1, length = 256)), asp=1)
+meaningfullness_image = rasterGrob(standard_deviations_prepared_for_image)
+meaningfullness_image_strict = rasterGrob(digit_example_strict/255)
+meaningfullness_image_soft = rasterGrob(digit_example/255)
+
+png('figures/discarded_pixels.png')
+grid.arrange(meaningfullness_image_strict, meaningfullness_image_soft, ncol=2, clip=TRUE, respect=FALSE, heights=c(1,0))
+# image(digit_example_strict, axes = FALSE, col = grey(seq(0, 1, length = 256)), asp=1)
+# image(digit_example, axes = FALSE, col = grey(seq(0, 1, length = 256)), asp=1)
+dev.off()
+
+png('figures/meaningless.png')
+image(standard_deviations_prepared_for_image, axes=FALSE, col = grey(seq(0, 1, length = 256)), asp=1)
+dev.off
 ```
 
 ```{r}
 # Plot count of each digit's pixel in barplot and then display it in a table
 label_distribution = table(mnist.dat[,1]) 
-label_distribution
-barplot(label_distribution, col=rainbow(10, 0.5), main="Digits in dataset")
+barplot(label_distribution, main="Digits in dataset")
 # as.data.frame(mnist.dat) %>% group_by(label) %>% summarise(count = n())
 ```
 ```{r}
