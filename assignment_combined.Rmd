@@ -98,7 +98,7 @@ digit_example = show_image_data(actual_digit)
 image(digit_example, axes = FALSE, col = grey(seq(0, 1, length = 256)), asp=1)
 ```
 ```{r}
-# standard_deviations_prepared_for_image = matrix(mnist.summary$sd/max(mnist.summary$sd), nrow=28, ncol=28, byrow=TRUE)
+standard_deviations_prepared_for_image = matrix(mnist.summary$sd/max(mnist.summary$sd), nrow=28, ncol=28, byrow=TRUE)
 # summary_of_sds <- melt(standard_deviations_prepared_for_image)
 # ggplot(data = summary_of_sds, aes(x=Var1, y=Var2, fill=value)) + geom_tile() +
 # scale_x_discrete(name="X Dimension") + scale_y_discrete(name="Y Dimension")
