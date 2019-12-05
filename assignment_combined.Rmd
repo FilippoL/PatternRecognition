@@ -24,6 +24,8 @@ output:
 
 
 ```{r warning=FALSE}
+options(warn=-1)#Warning off
+
 library(OpenImageR) 
 library(dplyr)
 library(iterators)
@@ -35,6 +37,8 @@ library(e1071)
 library(factoextra)
 library(grid)
 library(gridExtra)
+
+options(warn=0)#Warning back on
 ```
 ```{r}
 mnist.dat <- read.csv("mnist.csv")
@@ -50,15 +54,6 @@ show_image_from_data = function(data, row) {
 }
 show_image_data = function(actual_digit) {
   return (t(matrix(as.numeric(actual_digit),nrow=28,ncol=28,byrow=T))[,c(28:1),drop = FALSE])
-}
-combine_images = function(normal_digit){
-  actual_digit = normal_digit
-  digit_example = show_image_data(actual_digit)
-  flipped_image = Augmentation(digit_example, flip_mode = "vertical")
-  new_image = flipped_image + digit_example
-  indices_cap_pixel_values = which(new_image>255)
-  new_image[indices_cap_pixel_values] = 255
-  return (t(new_image))
 }
 
 edge_detect = function(normal_digit){
@@ -79,10 +74,10 @@ mnist.summary = data.frame(t(sapply( pixels_data , function(x) cbind(mean = mean
                                   maximum = max(x) ,
                                   s.size = length(x)))))
 colnames(mnist.summary) = c("mean","sd","median","minimum","maximum","size")
-```
-```{r}
 head(mnist.summary[mnist.summary$sd==0,])
+
 ```
+
 ```{r}
 indices_of_useless_features = which(mnist.summary$sd == 0)
 actual_digit_strict = mnist.dat[2,-1]
@@ -99,42 +94,27 @@ image(digit_example, axes = FALSE, col = grey(seq(0, 1, length = 256)), asp=1)
 ```
 ```{r}
 # standard_deviations_prepared_for_image = matrix(mnist.summary$sd/max(mnist.summary$sd), nrow=28, ncol=28, byrow=TRUE)
-# summary_of_sds <- melt(standard_deviations_prepared_for_image)
-# ggplot(data = summary_of_sds, aes(x=Var1, y=Var2, fill=value)) + geom_tile() +
-# scale_x_discrete(name="X Dimension") + scale_y_discrete(name="Y Dimension")
+# meaningfullness_image = rasterGrob(standard_deviations_prepared_for_image)
+# meaningfullness_image_strict = rasterGrob(digit_example_strict/255)
+# meaningfullness_image_soft = rasterGrob(digit_example/255)
 # 
-# image(standard_deviations_prepared_for_image, axes = FALSE, col = grey(seq(0, 1, length = 256)), asp=1)
-meaningfullness_image = rasterGrob(standard_deviations_prepared_for_image)
-meaningfullness_image_strict = rasterGrob(digit_example_strict/255)
-meaningfullness_image_soft = rasterGrob(digit_example/255)
-
-png('figures/discarded_pixels.png')
-grid.arrange(meaningfullness_image_strict, meaningfullness_image_soft, ncol=2, clip=TRUE, respect=FALSE, heights=c(1,0))
-# image(digit_example_strict, axes = FALSE, col = grey(seq(0, 1, length = 256)), asp=1)
-# image(digit_example, axes = FALSE, col = grey(seq(0, 1, length = 256)), asp=1)
-dev.off()
-
-png('figures/meaningless.png')
-image(standard_deviations_prepared_for_image, axes=FALSE, col = grey(seq(0, 1, length = 256)), asp=1)
-dev.off
+# png('figures/discarded_pixels.png')
+# grid.arrange(meaningfullness_image_strict, meaningfullness_image_soft, ncol=2, clip=TRUE, respect=FALSE, heights=c(1,0))
+# dev.off()
+# 
+# png('figures/meaningless.png')
+# image(standard_deviations_prepared_for_image, axes=FALSE, col = grey(seq(0, 1, length = 256)), asp=1)
+# dev.off
 ```
 
 ```{r}
-# Plot count of each digit's pixel in barplot and then display it in a table
 label_distribution = table(mnist.dat[,1]) 
 barplot(label_distribution, main="Digits in dataset")
-# as.data.frame(mnist.dat) %>% group_by(label) %>% summarise(count = n())
 ```
 ```{r}
 expected_accuracy_on_majority_label_classification = label_distribution[2] / sum(label_distribution)
 sprintf("Accuracy if 1 was predicted for all labels: %.2f %%", expected_accuracy_on_majority_label_classification * 100)
 ```
-
-Threshold decision
-
-[useful link](https://stackoverflow.com/questions/25360248/arrange-multiple-32-png-files-in-a-grid/51865036#51865036)
-
-Even after removing some data we can still see the picture as follows:
 
 ```{r}
 actual_digit = mnist.dat[450,-1]
@@ -161,6 +141,12 @@ cleaned_images = t(apply(pixels_data, MARGIN = 1, FUN=function(x) replace(x, whi
 image_density = apply(cleaned_images, MARGIN=1, FUN=function(x) sum(x))
 image_density_per_pixel = apply(data.frame(image_density), MARGIN=1, FUN=function(x) sum(x)/784)
 
+pca_model = prcomp(scaled_pixels_data[,-indices_of_useless_features])
+principal_components = as.matrix(pca_model$x)
+
+edge_detected_images = t(apply(cleaned_images, MARGIN=1, FUN=edge_detect))
+image_density_edge_detected = apply(edge_detected_images, MARGIN=1, FUN=function(x) sum(x))
+
 data = cbind.data.frame(density=image_density, 
                         density_per_pixel=scale(image_density_per_pixel), 
                         scaled_density = scale(image_density), 
@@ -175,14 +161,36 @@ data2 = cbind.data.frame(log_dens=scale(log(image_density_per_pixel)),
                         squared_dens=scale(image_density^2),
                         label=mnist.dat$label)
 
+
+
+
+data3 = cbind.data.frame(scaled_density = scale(image_density),
+                         first_pca = scale(principal_components[,1]),
+                        label=mnist.dat$label)
+
+
+
+
+data4 = cbind.data.frame(density=image_density, 
+                        scaled_density=scale(image_density), 
+                        scaled_density_edge_detected = scale(image_density_edge_detected), 
+                        label=mnist.dat$label)
+
+
+data5 = cbind.data.frame(scaled_density = scale(image_density),
+                         first_pca = scale(principal_components[,1]),
+                         second_pca = scale(principal_components[,2]),
+                         label=mnist.dat$label)
+
 head(data)
 head(data2)
-
+head(data3)
+head(data4)
+head(data5)
 ```
 ```{r}
 data_for_boxplots = cbind.data.frame(density=image_density, 
                         label=mnist.dat$label)
-# head(dcast(formula=density~label, data=data_for_boxplots))
 boxplot(density~label,sample_n(data_for_boxplots, 5000))
 ```
 
@@ -195,15 +203,13 @@ summary_per_digit = rbind.data.frame(tapply(data$density_per_pixel, data$label, 
                                   s.size = length(x))
                            ))
 rownames(summary_per_digit) = c("mean","sd","median","minimum","maximum","size") 
-#TODO: Plot all distributions
 data.frame(t(summary_per_digit))
 ```
 
+#Distance Matrix Density
 ```{r}
-cormat = dist(t(summary_per_digit[c("mean","sd"),]))
-melted_cormat <- melt(ifelse(!is.finite(log(as.matrix(cormat))+4), 0, log(as.matrix(cormat))+4))
-ggplot(data = melted_cormat, aes(x=Var1, y=Var2, fill=value)) + geom_tile()
-
+distance_matrix = dist(t(summary_per_digit[c("mean","sd"),]))
+melted_cormat = melt(ifelse(!is.finite(log(as.matrix(distance_matrix))+4), 0, log(as.matrix(distance_matrix))+4))
 
 ggplot(data =  melted_cormat, mapping = aes(x = Var1, y = Var2)) +
   geom_tile(aes(fill = value), colour = "white") +
@@ -212,14 +218,12 @@ ggplot(data =  melted_cormat, mapping = aes(x = Var1, y = Var2)) +
   theme_bw() + theme(legend.position = "right") + 
   scale_x_discrete(name="Digit") + scale_y_discrete(name="Digit")
 ```
+
+#Logit only Density
+
 ```{r}
-distance_matrix = dist(t(summary_per_digit[c("mean","sd","median","minimum","maximum"),]))
-melted_distance_matrix <- melt(as.matrix(distance_matrix))
-ggplot(data = melted_distance_matrix, aes(x=Var1, y=Var2, fill=value)) + geom_tile()
-```
-```{r}
-density_model = multinom(label ~ scaled_density, data2, maxit=1000)
-predicted = predict(density_model, data)
+density_model_density_only = multinom(label ~ scaled_density, data2, maxit=1000)
+predicted = predict(density_model_density_only, data)
 confmat = table(data$label, predicted)
 
 acc = sum(diag(confmat))/sum(confmat)
@@ -237,16 +241,9 @@ colnames(overall) = c("Precision", "Recall")
 
 overall
 acc
-# precision
-# recall
-# acc_per_clas
-
 ```
-```{r}
-density_model
-```
-```{r}
 
+```{r}
 melted_confmat <- melt(as.matrix(confmat))
 ggplot(data =  melted_confmat, mapping = aes(x = Var1, y = predicted)) +
   geom_tile(aes(fill = value), colour = "white") +
@@ -256,73 +253,72 @@ ggplot(data =  melted_confmat, mapping = aes(x = Var1, y = predicted)) +
   scale_x_discrete(name="Actual Digit", limits=0:9) + scale_y_discrete(name="Predicted Digit", limits=0:9)
 ```
 
+#Logit Density + Squared Density
+
 ```{r}
-density_model2 = multinom(label ~ scaled_density + squared_dens, data2, maxit=1000)
-predicted = predict(density_model2, data2)
+density_model_density_and_squared = multinom(label ~ scaled_density + squared_dens, data2, maxit=1000)
+predicted = predict(density_model_density_and_squared, data2)
 confmat = table(data2$label, predicted)
 confmat
 sum(diag(confmat))/sum(confmat)
-
-
 ```
 
 ```{r}
-cleaned_images = t(apply(pixels_data, MARGIN = 1, FUN=function(x) replace(x, which(x < 5), 0)))
+melted_confmat <- melt(as.matrix(confmat))
+ggplot(data =  melted_confmat, mapping = aes(x = Var1, y = predicted)) +
+  geom_tile(aes(fill = value), colour = "white") +
+  geom_text(aes(label = sprintf("%1.0f", value)), vjust = 1) +
+  scale_fill_gradient(low = "blue", high = "red") +
+  theme_bw() + theme(legend.position = "none") + 
+  scale_x_discrete(name="Actual Digit", limits=0:9) + scale_y_discrete(name="Predicted Digit", limits=0:9)
+```
 
-edge_detected_images = t(apply(cleaned_images, MARGIN=1, FUN=edge_detect))
+#Logit Edge Detection
+
+```{r}
 actual_digit = edge_detected_images[445,]
-
 image(matrix(actual_digit, nrow=28,ncol=28,byrow=T), axes = FALSE, col = grey(seq(0, 1, length = 256)), asp=1)
-
 ```
-```{r}
-image_density = apply(cleaned_images, MARGIN=1, FUN=function(x) sum(x))
-image_density_edge_detected = apply(edge_detected_images, MARGIN=1, FUN=function(x) sum(x))
 
-data = cbind.data.frame(density=image_density, 
-                        scaled_density=scale(image_density), 
-                        scaled_density_edge_detected = scale(image_density_edge_detected), 
-                        label=mnist.dat$label)
-
-head(data)
-```
 ```{r}
-density_model = multinom(label ~ scaled_density_edge_detected, data, maxit=1000)
-predicted = predict(density_model, data)
-confmat = table(data$label, predicted)
-confmat
+density_model_edge_detected = multinom(label ~ scaled_density_edge_detected, data4, maxit=1000)
+predicted = predict(density_model_edge_detected, data4)
+confmat = table(data4$label, predicted)
 sum(diag(confmat))/sum(confmat)
 ```
 
 ```{r}
-pca_model = prcomp(scaled_pixels_data[,-indices_of_useless_features])
-```
-```{r}
-principal_components = as.matrix(pca_model$x)
-```
-
-```{r}
-data3 = cbind.data.frame(scaled_density = scale(image_density),
-                         first_pca = scale(principal_components[,1]),
-                        label=mnist.dat$label)
-head(data3)
+melted_confmat <- melt(as.matrix(confmat))
+ggplot(data =  melted_confmat, mapping = aes(x = Var1, y = predicted)) +
+  geom_tile(aes(fill = value), colour = "white") +
+  geom_text(aes(label = sprintf("%1.0f", value)), vjust = 1) +
+  scale_fill_gradient(low = "blue", high = "red") +
+  theme_bw() + theme(legend.position = "none") + 
+  scale_x_discrete(name="Actual Digit", limits=0:9) + scale_y_discrete(name="Predicted Digit", limits=0:9)
 ```
 
+#Logit Principle Component
 
 ```{r}
-density_model3 = multinom(label ~ first_pca, data3, maxit=1000)
-density_model3
+density_model_PCA = multinom(label ~ first_pca, data3, maxit=1000)
 
-predicted = predict(density_model3, data3)
-confmat = table(data2$label, predicted)
-confmat
+predicted = predict(density_model_PCA, data3)
+confmat = table(data3$label, predicted)
 sum(diag(confmat))/sum(confmat)
 ```
 
 ```{r}
-pca_model = prcomp(cleaned_images[,-indices_of_useless_features])
-principal_components = as.matrix(pca_model$x)
+melted_confmat <- melt(as.matrix(confmat))
+ggplot(data =  melted_confmat, mapping = aes(x = Var1, y = predicted)) +
+  geom_tile(aes(fill = value), colour = "white") +
+  geom_text(aes(label = sprintf("%1.0f", value)), vjust = 1) +
+  scale_fill_gradient(low = "blue", high = "red") +
+  theme_bw() + theme(legend.position = "none") + 
+  scale_x_discrete(name="Actual Digit", limits=0:9) + scale_y_discrete(name="Predicted Digit", limits=0:9)
 ```
+
+#Principles components Analysis, Distance Matrix and BoxPlots
+
 ```{r}
 summary_per_digit = rbind.data.frame(tapply(principal_components[,1]/784, mnist.dat$label,  function(x) cbind(mean = mean(x) ,
                                   sd = sd(x) ,
@@ -332,10 +328,8 @@ summary_per_digit = rbind.data.frame(tapply(principal_components[,1]/784, mnist.
                                   s.size = length(x))
                            ))
 rownames(summary_per_digit) = c("mean","sd","median","minimum","maximum","size") 
-#TODO: Plot all distributions
 data.frame(t(summary_per_digit))
 ```
-
 
 ```{r}
 cormat = dist(t(summary_per_digit[c("mean","sd"),]))
@@ -351,24 +345,72 @@ ggplot(data =  melted_cormat, mapping = aes(x = Var1, y = Var2)) +
   scale_x_discrete(name="Digit") + scale_y_discrete(name="Digit")
 ```
 
+#First and Second PC 
 
 ```{r}
+data_for_boxplots = cbind.data.frame(pca=principal_components[,1], label = mnist.dat$label)
+boxplot(pca~label, sample_n(data_for_boxplots, 5000), main="First PC", xlab="Classes", ylab="PC value")
+
 data_for_boxplots = cbind.data.frame(pca=principal_components[,2], label = mnist.dat$label)
-boxplot(pca~label, sample_n(data_for_boxplots, 5000), main="PCA", xlab="Classes", ylab="PC value")
+boxplot(pca~label, sample_n(data_for_boxplots, 5000), main="Second PC", xlab="Classes", ylab="PC value")
 ```
 
-
+```{r}
+density_model_first_second_PC = multinom(label ~ second_pca + first_pca, data5, maxit=1000)
+predicted = predict(density_model_first_second_PC, data5)
+confmat = table(data5$label, predicted)
+sum(diag(confmat))/sum(confmat)
+```
 
 ```{r}
-data3 = cbind.data.frame(scaled_density = scale(image_density),
-                         first_pca = scale(principal_components[,2]),
-                        # scaled_density_edge_detected = scale(image_density_edge_detected), 
-                        label=mnist.dat$label)
-density_model3 = multinom(label ~ scaled_density + first_pca, data3, maxit=1000)
-density_model3
+melted_confmat <- melt(as.matrix(confmat))
+ggplot(data =  melted_confmat, mapping = aes(x = Var1, y = predicted)) +
+  geom_tile(aes(fill = value), colour = "white") +
+  geom_text(aes(label = sprintf("%1.0f", value)), vjust = 1) +
+  scale_fill_gradient(low = "blue", high = "red") +
+  theme_bw() + theme(legend.position = "none") + 
+  scale_x_discrete(name="Actual Digit", limits=0:9) + scale_y_discrete(name="Predicted Digit", limits=0:9)
+```
 
-predicted = predict(density_model3, data3)
-confmat = table(data2$label, predicted)
+#Advanced ML Models
+
+##Splitting data train/test
+```{r}
+data_for_ml = cbind.data.frame(label=mnist.dat$label, scaled_pixels_data)
+training_data = sample_n(data_for_ml, 5000)
+validation_data = setdiff(data_for_ml, training_data) 
+```
+
+#SAMPLING 500 FROM TRAINING, TO BE REMOVED!!!
+```{r}
+memory.limit(30000)
+training_data = sample_n(training_data, 500)
+```
+
+##Multinomial Logistic Regression
+```{r}
+trained_model = multinom(label ~., family = "multinomial", data = training_data, MaxNWts =10000000, maxit=50)
+predicted = predict(trained_model, validation_data[,-1])
+confmat = table(validation_data$label, predicted)
+sum(diag(confmat))/sum(confmat)
+```
+
+```{r}
+melted_confmat <- melt(as.matrix(confmat))
+ggplot(data =  melted_confmat, mapping = aes(x = Var1, y = predicted)) +
+  geom_tile(aes(fill = value), colour = "white") +
+  geom_text(aes(label = sprintf("%1.0f", value)), vjust = 1) +
+  scale_fill_gradient(low = "blue", high = "red") +
+  theme_bw() + theme(legend.position = "none") + 
+  scale_x_discrete(name="Actual Digit", limits=0:9) + scale_y_discrete(name="Predicted Digit", limits=0:9)
+```
+
+##Tuned
+```{r}
+tuned_model_mulinom <- cv.glmnet(as.matrix(training_data[,-c(1)]), training_data$label,family="multinomial", type.measure="class")
+plot(tuned_model_mulinom)
+predicted = predict(tuned_model_mulinom, as.matrix(validation_data[,-1]), type="class")
+confmat = table(validation_data$label, predicted)
 confmat
 sum(diag(confmat))/sum(confmat)
 ```
@@ -383,59 +425,82 @@ ggplot(data =  melted_confmat, mapping = aes(x = Var1, y = predicted)) +
   scale_x_discrete(name="Actual Digit", limits=0:9) + scale_y_discrete(name="Predicted Digit", limits=0:9)
 ```
 
+##Support Vector Machine
+```{r}
+options(warn=-1)#Warning off
 
-```{r}
-#pixels_data = mnist.dat[,-1]
-# scaled_pixels_data <- mnist.dat[,2:784]/255
-# down_sampled_images = pixels_data %>% as.matrix(ncol=28, nrow=28) %>% down_sample_image(factor=2)
-# scaled_pixels_data = scale(pixels_data)
-# scaled_pixels_data[is.na(scaled_pixels_data)] = 0 #Replacing NaN with 0
-data_for_ml = cbind.data.frame(label=mnist.dat$label, scaled_pixels_data)
-training_data = sample_n(data_for_ml, 5000)
-validation_data = setdiff(data_for_ml, training_data) #TODO: check what is going on
-```
-
-```{r}
-trained_model = multinom(label ~., family = "multinomial", data = training_data, MaxNWts =10000000, maxit=50)
-```
-
-```{r}
-predicted = predict(trained_model, training_data[,-1])
-confmat = table(training_data$label, predicted)
-confmat
-sum(diag(confmat))/sum(confmat)
-```
-
-```{r}
-predicted = predict(trained_model, validation_data[,-1])
-confmat = table(validation_data$label, predicted)
-confmat
-sum(diag(confmat))/sum(confmat)
-```
-```{r}
 trained_model = svm(label ~., data = training_data)
 predicted = predict(trained_model, validation_data[,-1])
 confmat = table(validation_data$label, predicted)
-confmat
 sum(diag(confmat))/sum(confmat)
+
 ```
 
+```{r}
+melted_confmat <- melt(as.matrix(confmat))
+ggplot(data =  melted_confmat, mapping = aes(x = Var1, y = predicted)) +
+  geom_tile(aes(fill = value), colour = "white") +
+  geom_text(aes(label = sprintf("%1.0f", value)), vjust = 1) +
+  scale_fill_gradient(low = "blue", high = "red") +
+  theme_bw() + theme(legend.position = "none") + 
+  scale_x_discrete(name="Actual Digit", limits=0:9) + scale_y_discrete(name="Predicted Digit", limits=0:9)
+```
+
+##Tuned
+```{r}
+tuned_results_svm = tune.svm(label ~., data = training_data, cost=1:5, gamma = c(0.1, 0.05, 0.0025, 0.00125, 0.000625))
+tuned_results_svm$performances
+
+tuned_model_svm = svm(label ~., data = training_data)
+predicted = predict(tuned_model_svm, validation_data[,-1])
+confmat = table(validation_data$label, predicted)
+sum(diag(confmat))/sum(confmat)
+
+options(warn=0)#Warning back on
+```
+
+```{r}
+melted_confmat <- melt(as.matrix(confmat))
+ggplot(data =  melted_confmat, mapping = aes(x = Var1, y = predicted)) +
+  geom_tile(aes(fill = value), colour = "white") +
+  geom_text(aes(label = sprintf("%1.0f", value)), vjust = 1) +
+  scale_fill_gradient(low = "blue", high = "red") +
+  theme_bw() + theme(legend.position = "none") + 
+  scale_x_discrete(name="Actual Digit", limits=0:9) + scale_y_discrete(name="Predicted Digit", limits=0:9)
+```
+
+##Neural Network
 ```{r}
 trained_model = nnet(label ~., data = training_data, size=5,MaxNWts=5000)
 predicted = predict(trained_model, validation_data[,-1], type="class")
 confmat = table(validation_data$label, predicted)
-confmat
 sum(diag(confmat))/sum(confmat)
 ```
+
+##Tuned
 ```{r}
-tuned_model_mulinom <- cv.glmnet(as.matrix(training_data[,-c(1)]), training_data$label,family="multinomial", type.measure="class")
-plot(tuned_model_mulinom)
-predicted = predict(tuned_model_mulinom, as.matrix(validation_data[,-1]), type="class")
+# my_nnet = nnet(MaxNWts=5000)
+tuned_results_nnet = tune(nnet, train.x = training_data[,-1], train.y = as.numeric(training_data$label), data = training_data, MaxNWts=5000, ranges =list(size=seq(1,5), decay=c(0.1, 0.05, 0.0025, 0.00125, 0.000625)))
+tuned_results_nnet$performances
+
+tuned_model_nnet = nnet(label ~., data = training_data, size=5, MaxNWts=5000) 
+predicted = predict(tuned_model_nnet, validation_data[,-1], type="class")
 confmat = table(validation_data$label, predicted)
 confmat
 sum(diag(confmat))/sum(confmat)
 ```
 
+```{r}
+melted_confmat <- melt(as.matrix(confmat))
+ggplot(data =  melted_confmat, mapping = aes(x = Var1, y = predicted)) +
+  geom_tile(aes(fill = value), colour = "white") +
+  geom_text(aes(label = sprintf("%1.0f", value)), vjust = 1) +
+  scale_fill_gradient(low = "blue", high = "red") +
+  theme_bw() + theme(legend.position = "none") + 
+  scale_x_discrete(name="Actual Digit", limits=0:9) + scale_y_discrete(name="Predicted Digit", limits=0:9)
+```
+
+#Plotting Accuracies
 ```{r}
 accuracies <- c(11.15, 22.68, 22.9, 29.28, 36.23)
 par(mar=c(7, 5, 1, 1))
@@ -445,32 +510,7 @@ ylab = "Accuracy (%)",
 ylim=c(0,100), srt=45, xpd=TRUE,
 las=2)
 namesss = c("Majority classification", "Density only", "Logarithmic nonlinearity", "Edge detection", "Second principle component")
-## Add text at top of bars
 text(xx, y = accuracies, label = accuracies, pos = 3, cex = 0.8, col = "red")
 axis(1, at=xx, labels=namesss, tick=FALSE, las=2, line=-0.5, cex.axis=0.5)
 
-```
-
-
-```{r}
-tuned_results_svm = tune.svm(label ~., data = training_data, cost=1:10, gamma = c(0.1, 0.01, 0.001, 0.0001, 0.00001))
-tuned_results_svm$performances
-```
-```{r}
-tuned_results_nnet = tune.nnet(label ~., data = training_data, size=1:10, decay=c(0.1, 0.01, 0.001, 0.0001, 0.00001))
-tuned_results_nnet$performances
-```
-```{r}
-tuned_model_svm = svm(label ~., data = training_data) # TODO: Add cost, gamma
-predicted = predict(tuned_model_svm, validation_data[,-1])
-confmat = table(validation_data$label, predicted)
-confmat
-sum(diag(confmat))/sum(confmat)
-```
-```{r}
-tuned_model_nnet = nnet(label ~., data = training_data, size=5, MaxNWts=5000) # TODO: Add size, decay
-predicted = predict(tuned_model_nnet, validation_data[,-1], type="class")
-confmat = table(validation_data$label, predicted)
-confmat
-sum(diag(confmat))/sum(confmat)
 ```
