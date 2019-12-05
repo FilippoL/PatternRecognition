@@ -412,7 +412,7 @@ saveRDS(tuned_results_multinom, "tuned_results_multinom.rds")
 
 ##Tuned
 ```{r}
-tuned_results_svm = tune.svm(label ~., data = training_data, cost=1:5, gamma = 10^seq(-1,-5), tunecontrol=tunecontrol=tune.control(cross=prod.number_of_repeats))
+tuned_results_svm = tune.svm(label ~., data = training_data, cost=1:5, gamma = 10^seq(-1,-5), tunecontrol=tune.control(cross=prod.number_of_repeats))
 saveRDS(tuned_results_svm, "tuned_results_svm.rds")
 ```
 
@@ -426,7 +426,7 @@ saveRDS(tuned_results_nnet, "tuned_results_nnet.rds")
 #Plotting Accuracies
 ```{r}
 # png('./figures/accuracies_simple_classifiers.png')
-accuracies <- accs
+accuracies <- round(accs*100, 2)
 par(mar=c(7, 5, 1, 1))
     xx = barplot(accuracies,
     main="Accuracies of different classifiers",
@@ -477,4 +477,13 @@ mcnemar.test(table(predicted_multinom, predicted_nnet))
 mcnemar.test(table(predicted_multinom, predicted_svm))
 mcnemar.test(table(as.factor(predicted_nnet), predicted_svm))
 ```
+```{r}
+# predicted = predict(tuned_results_nnet$best.model, training_data[,-1])
+# predicted = colnames(predicted)[max.col(predicted,ties.method="first")]
+# # confmat = table(validation_data$label, predicted)
+# # predicted_nnet = predicted
+# # plot_confusion_matrix(confmat)
+# sum(diag(confmat))/sum(confmat)
+```
+
 
