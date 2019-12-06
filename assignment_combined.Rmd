@@ -40,7 +40,7 @@ library(gridExtra)
 library(stats)
 
 
-production = FALSE
+production = TRUE
 if(production == TRUE){
   prod.number_of_repeats = 10
   prod.sample_size = 5000
@@ -446,8 +446,8 @@ tuned_results_nnet = readRDS("./tuned_results_nnet.rds")
 ```
 
 ```{r}
-plot(tuned_results_svm)
-plot(tuned_results_nnet)
+plot(tuned_results_svm, transform.x = log10, xlab="Log(gamma)")
+plot(tuned_results_nnet, transform.y = log10, ylab="Log(lambda)")
 plot(tuned_results_multinom)
 ```
 
@@ -474,7 +474,7 @@ sum(diag(confmat))/sum(confmat)
 ## McNemar Browker Test
 ```{r}
 mcnemar.test(table(predicted_multinom, predicted_nnet))
-mcnemar.test(table(predicted_multinom, predicted_svm))
+mcnemar.test(table(predicted_svm, predicted_multinom))
 mcnemar.test(table(as.factor(predicted_nnet), predicted_svm))
 ```
 ```{r}
