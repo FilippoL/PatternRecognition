@@ -446,9 +446,13 @@ tuned_results_nnet = readRDS("./tuned_results_nnet.rds")
 ```
 
 ```{r}
+png("figures/hp_plot_svm.png")
 plot(tuned_results_svm, transform.x = log10, xlab="Log(gamma)")
+png("figures/hp_plot_nnet.png")
 plot(tuned_results_nnet, transform.y = log10, ylab="Log(lambda)")
+png("figures/hp_plot_multinom.png")
 plot(tuned_results_multinom)
+dev.off()
 ```
 
 ```{r}
