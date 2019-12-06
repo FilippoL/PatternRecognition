@@ -263,7 +263,7 @@ overall = cbind.data.frame(Precision=precision, Recall=recall)
 colnames(overall) = c("Precision", "Recall")
 
 overall
-acc
+accs = c(accs, acc)
 ```
 
 ```{r}
@@ -327,7 +327,8 @@ density_model_PCA = multinom(label ~ first_pca, data5, maxit=1000)
 
 predicted = predict(density_model_PCA, data5)
 confmat = table(data5$label, predicted)
-accs = c(accs, sum(diag(confmat))/sum(confmat))
+#accs = c(accs, sum(diag(confmat))/sum(confmat))
+sum(diag(confmat))/sum(confmat)
 ```
 
 ```{r}
@@ -394,35 +395,6 @@ ggplot(data =  melted_confmat, mapping = aes(x = Var1, y = predicted)) +
   theme_bw() + theme(legend.position = "none") + 
   scale_x_discrete(name="Actual Digit", limits=0:9) + scale_y_discrete(name="Predicted Digit", limits=0:9)
 ```
-
-#Advanced ML Models
-
-##Splitting data train/test
-```{r}
-data_for_ml = cbind.data.frame(label=mnist.dat$label, scaled_pixels_data)
-training_data = sample_n(data_for_ml, prod.sample_size)
-validation_data = setdiff(data_for_ml, training_data) 
-```
-
-##Tuned
-```{r}
-tuned_results_multinom <- cv.glmnet(as.matrix(training_data[,-c(1)]), training_data$label,family="multinomial", type.measure="class")
-saveRDS(tuned_results_multinom, "tuned_results_multinom.rds")
-```
-
-##Tuned
-```{r}
-tuned_results_svm = tune.svm(label ~., data = training_data, cost=1:5, gamma = 10^seq(-1,-5), tunecontrol=tune.control(cross=prod.number_of_repeats))
-saveRDS(tuned_results_svm, "tuned_results_svm.rds")
-```
-
-##Tuned
-```{r}
-copy_for_nn = data.frame(training_data[,-1])
-tuned_results_nnet = tune(method=nnet, train.x = class.ind(label) ~ . , data = training_data, MaxNWts=5000, ranges=list(size=seq(1,5), decay=10^seq(-1,-5)), tunecontrol=tune.control(cross=prod.number_of_repeats))
-saveRDS(tuned_results_nnet, "tuned_results_nnet.rds")
-```
-
 #Plotting Accuracies
 ```{r}
 # png('./figures/accuracies_simple_classifiers.png')
@@ -433,11 +405,39 @@ par(mar=c(7, 5, 1, 1))
     ylab = "Accuracy (%)",
     ylim=c(0,100), srt=45, xpd=TRUE,
     las=2)
-namesss = c("Majority\nclassification", "Density\nonly", "Logarithmic\nnonlinearity", "Edge\ndetection", "First\nprinciple\ncomponent")
+namesss = c("Majority\nclassification", "Density\nonly", "Squared\nnonlinearity", "Edge\ndetection", "First\nprinciple\ncomponent")
 text(xx, y = accuracies, label = accuracies, pos = 3, cex = 0.8, col = "red")
 axis(1, at=xx, labels=namesss, tick=FALSE, las=2, line=-0.5, cex.axis=1)
 # dev.off()
 ```
+
+#Advanced ML Models
+
+##Splitting data train/test
+```{r}
+data_for_ml = cbind.data.frame(label=mnist.dat$label, scaled_pixels_data)
+training_data = sample_n(data_for_ml, prod.sample_size)
+validation_data = setdiff(data_for_ml, training_data) 
+```
+
+<!-- ##Tuned -->
+<!-- ```{r} -->
+<!-- tuned_results_multinom <- cv.glmnet(as.matrix(training_data[,-c(1)]), training_data$label,family="multinomial", type.measure="class") -->
+<!-- saveRDS(tuned_results_multinom, "tuned_results_multinom.rds") -->
+<!-- ``` -->
+
+<!-- ##Tuned -->
+<!-- ```{r} -->
+<!-- tuned_results_svm = tune.svm(label ~., data = training_data, cost=1:5, gamma = 10^seq(-1,-5), tunecontrol=tune.control(cross=prod.number_of_repeats)) -->
+<!-- saveRDS(tuned_results_svm, "tuned_results_svm.rds") -->
+<!-- ``` -->
+
+<!-- ##Tuned -->
+<!-- ```{r} -->
+<!-- copy_for_nn = data.frame(training_data[,-1]) -->
+<!-- tuned_results_nnet = tune(method=nnet, train.x = class.ind(label) ~ . , data = training_data, MaxNWts=5000, ranges=list(size=seq(1,5), decay=10^seq(-1,-5)), tunecontrol=tune.control(cross=prod.number_of_repeats)) -->
+<!-- saveRDS(tuned_results_nnet, "tuned_results_nnet.rds") -->
+<!-- ``` -->
 
 ```{r}
 tuned_results_multinom = readRDS("./tuned_results_multinom.rds")
@@ -446,13 +446,14 @@ tuned_results_nnet = readRDS("./tuned_results_nnet.rds")
 ```
 
 ```{r}
-png("figures/hp_plot_svm.png")
-plot(tuned_results_svm, transform.x = log10, xlab="Log(gamma)")
-png("figures/hp_plot_nnet.png")
-plot(tuned_results_nnet, transform.y = log10, ylab="Log(lambda)")
-png("figures/hp_plot_multinom.png")
+# png("figures/hp_plot_svm.png")
+plot(tuned_results_svm, transform.x = log10, xlab="Log(gamma)", main = "SVM Hyperparameters")
+# png("figures/hp_plot_nnet.png")
+plot(tuned_results_nnet, transform.y = log10, ylab="Log(lambda)", main = "Nnet Hyperparameters")
+# png("figures/hp_plot_multinom.png")
 plot(tuned_results_multinom)
-dev.off()
+title("Multinom Lambda", line = -1)
+# dev.off()
 ```
 
 ```{r}
@@ -461,6 +462,17 @@ confmat = table(validation_data$label, predicted)
 predicted_svm = predicted
 plot_confusion_matrix(confmat)
 sum(diag(confmat))/sum(confmat)
+precision = as.data.frame(diag(confmat) / rowSums(confmat)) # Precision
+
+recall = as.data.frame(diag(confmat) / colSums(confmat)) # Recall
+
+recall[is.na(recall)] = 0
+
+overall = cbind.data.frame(Precision=precision, Recall=recall)
+colnames(overall) = c("Precision", "Recall")
+
+overall
+
 
 predicted = predict(tuned_results_nnet$best.model, validation_data[,-1])
 predicted = colnames(predicted)[max.col(predicted,ties.method="first")]
@@ -468,17 +480,38 @@ confmat = table(validation_data$label, predicted)
 predicted_nnet = predicted
 plot_confusion_matrix(confmat)
 sum(diag(confmat))/sum(confmat)
+precision = as.data.frame(diag(confmat) / rowSums(confmat)) # Precision
+
+recall = as.data.frame(diag(confmat) / colSums(confmat)) # Recall
+
+recall[is.na(recall)] = 0
+
+overall = cbind.data.frame(Precision=precision, Recall=recall)
+colnames(overall) = c("Precision", "Recall")
+
+overall
+
 
 predicted = predict(tuned_results_multinom, as.matrix(validation_data[,-1]), type="class")
 confmat = table(validation_data$label, predicted)
 predicted_multinom = predicted
 plot_confusion_matrix(confmat)
 sum(diag(confmat))/sum(confmat)
+precision = as.data.frame(diag(confmat) / rowSums(confmat)) # Precision
+
+recall = as.data.frame(diag(confmat) / colSums(confmat)) # Recall
+
+recall[is.na(recall)] = 0
+
+overall = cbind.data.frame(Precision=precision, Recall=recall)
+colnames(overall) = c("Precision", "Recall")
+
+overall
 ```
 ## McNemar Browker Test
 ```{r}
 mcnemar.test(table(predicted_multinom, predicted_nnet))
-mcnemar.test(table(predicted_svm, predicted_multinom))
+mcnemar.test(table(predicted_svm, as.factor(predicted_multinom)))
 mcnemar.test(table(as.factor(predicted_nnet), predicted_svm))
 ```
 ```{r}
